@@ -1,6 +1,6 @@
 const WebSocket = require('ws');
 
-const AUTH_TOKEN = 'dba8e97d-1ddf-347f-8ec3-4f9acbe18105';
+const AUTH_TOKEN = '<token-here>';
 const results = [];
 
 function testConnection(name, url, protocols) {
@@ -85,7 +85,7 @@ ws.on('close', (code, reason) => {
 }
 
 async function runTests() {
-  const apiWsUrl = 'ws://localhost:9102/multi-resource/v1/';
+  const apiWsUrl = 'ws://<gw-host>:<gw-ws-port>/<context>/<version>/';
 
   await testConnection('Single-valid', apiWsUrl, ['json']);
   await testConnection('All-supported', apiWsUrl, ['graphql-ws', 'graphql-transport-ws', 'json']);
