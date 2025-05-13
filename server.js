@@ -45,33 +45,57 @@ wss.on('connection', (socket, request) => {
   console.log(`[${connectionId}] Raw Sec-WebSocket-Protocol header:`, request.headers['sec-websocket-protocol'] || '(none)');
   console.log(`[${connectionId}] Negotiated subprotocol:`, clientProtocol || '(none)');
 
-  // 🔐 Enforce strict protocol match even if client sent none
   if (!clientProtocol || !SUPPORTED_PROTOCOLS.has(clientProtocol)) {
     console.warn(`[${connectionId}] ❌ Unsupported or missing subprotocol. Closing connection.`);
-    socket.close(1001, 'Unsupported or missing subprotocol'); // Protocol error
+    socket.close(1001, 'Unsupported or missing subprotocol');
     return;
   }
 
-  // Send welcome message
   socket.send(JSON.stringify({
     type: 'welcome',
     protocol: clientProtocol,
     time: new Date().toISOString()
   }));
 
+  let handshakeComplete = false;
+  let messageInterval;
+
   socket.on('message', (msg) => {
     const text = msg.toString();
     console.log(`[${connectionId}] 📩 Received: ${text}`);
 
-    if (clientProtocol === 'graphql-ws') {
-      socket.send(JSON.stringify({ type: 'GQL_ACK', payload: text }));
+    if (!handshakeComplete && text.trim().toLowerCase() === 'hi') {
+      handshakeComplete = true;
+      socket.send(JSON.stringify({
+        type: 'auth_ack',
+        message: '👋 Hi received! You’ll now start getting server messages.'
+      }));
+
+      // Start periodic messages after handshake
+      messageInterval = setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({
+            type: 'server-message',
+            message: '⏰ Periodic update from server',
+            timestamp: new Date().toISOString()
+          }));
+        }
+      }, 2000);
+    } else if (!handshakeComplete) {
+      socket.send(JSON.stringify({
+        type: 'error',
+        message: '❗ Say "hi" to begin receiving messages.'
+      }));
     } else {
-      socket.send(text); // echo back
+      // Optional: echo messages back after handshake
+      socket.send(JSON.stringify({
+        type: 'echo',
+        message: text
+      }));
     }
   });
 
-  // Ping every 10 seconds
-  const interval = setInterval(() => {
+  const pingInterval = setInterval(() => {
     if (socket.readyState === WebSocket.OPEN) {
       socket.ping();
     }
@@ -82,7 +106,8 @@ wss.on('connection', (socket, request) => {
   });
 
   socket.on('close', (code, reason) => {
-    clearInterval(interval);
+    clearInterval(pingInterval);
+    clearInterval(messageInterval);
     console.log(`[${connectionId}] 🔒 Connection closed (code=${code}, reason=${reason || '(none)'})`);
   });
 
